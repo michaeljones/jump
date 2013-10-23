@@ -1,8 +1,12 @@
 
 import           Graphics.Vty.Widgets.All
-import           Graphics.Vty.Attributes
 
-import           System.IO as S
+import           Graphics.Vty.Attributes ( def_attr )
+import           Graphics.Vty.LLInput    ( Key( KASCII) )
+
+import           System.IO   ( writeFile )
+import           System.Exit ( exitSuccess )
+
 import qualified Data.Text as T
 
 main :: IO ()
@@ -26,16 +30,23 @@ main = do
     c <- newCollection
     _ <- addToCollection c ui fg
 
+    -- Focus group event handlers
+    fg `onKeyPressed` exit
+
+    -- List event handlers
     lst `onItemActivated` writeResult
 
     runUi c defaultContext
 
+-- Callback for exiting via 'q'
+exit _ key _ | key == KASCII 'q' = do { shutdownUi; exitSuccess }
+             | otherwise         = return False
 
 -- Callback for list item selection
 writeResult :: ActivateItemEvent String b -> IO ()
 writeResult event =
     let ActivateItemEvent _ a _ = event
     in  do
-        S.writeFile "/tmp/jump-hs.sh" a
+        writeFile "/tmp/jump-hs.sh" a
         shutdownUi
 
