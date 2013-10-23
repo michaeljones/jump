@@ -35,12 +35,20 @@ main = do
 
     -- List event handlers
     lst `onItemActivated` writeResult
+    lst `onKeyPressed` navigate
 
     runUi c defaultContext
 
 -- Callback for exiting via 'q'
 exit _ key _ | key == KASCII 'q' = do { shutdownUi; exitSuccess }
              | otherwise         = return False
+
+-- Callback for list nagivation
+navigate list key _ | key == KASCII 'j' = handle $ scrollDown list
+                    | key == KASCII 'k' = handle $ scrollUp list
+                    | otherwise         = return False
+
+handle x = do { x; return True }
 
 -- Callback for list item selection
 writeResult :: ActivateItemEvent String b -> IO ()
