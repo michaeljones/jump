@@ -7,37 +7,48 @@ import           Graphics.Vty.LLInput    ( Key( KASCII) )
 import           System.IO   ( writeFile )
 import           System.Exit ( exitSuccess )
 
+import           Control.Monad ( when )
+
+import           Data.Maybe ( isJust )
+
 import qualified Data.Text as T
+import qualified Data.Yaml as Y
+import qualified Data.Vector as V
 
 main :: IO ()
 main = do
 
-    -- Create new list
-    lst <- newList def_attr
+    results <- Y.decodeFile "jumprc" :: IO ( Maybe Y.Value )
 
-    -- Populate options
-    addToList lst "choice" =<< ( plainText $ T.pack "choice" )
-    addToList lst "choice 1" =<< ( plainText $ T.pack "choice 1" )
-    addToList lst "choice 2" =<< ( plainText $ T.pack "choice 2" )
-    addToList lst "choice 3" =<< ( plainText $ T.pack "choice 3" )
-    addToList lst "choice 4" =<< ( plainText $ T.pack "choice 4" )
+    when (isJust results) $ do
 
-    ui <- centered lst
+        -- Create new list
+        list <- newList def_attr
 
-    fg <- newFocusGroup
-    addToFocusGroup fg lst
+        -- -- Populate options
+        let pairs = process results
+        mapM_ (addPairsToList list) pairs
 
-    c <- newCollection
-    _ <- addToCollection c ui fg
+        border <- bordered list
 
-    -- Focus group event handlers
-    fg `onKeyPressed` exit
+        fixed <- boxFixed 30 20 border
 
-    -- List event handlers
-    lst `onItemActivated` writeResult
-    lst `onKeyPressed` navigate
+        ui <- centered fixed
 
-    runUi c defaultContext
+        fg <- newFocusGroup
+        addToFocusGroup fg list
+
+        c <- newCollection
+        _ <- addToCollection c ui fg
+
+        -- Focus group event handlers
+        fg `onKeyPressed` exit
+
+        -- List event handlers
+        list `onItemActivated` writeResult
+        list `onKeyPressed` navigate
+
+        runUi c defaultContext
 
 -- Callback for exiting via 'q'
 exit _ key _ | key == KASCII 'q' = do { shutdownUi; exitSuccess }
@@ -47,8 +58,8 @@ exit _ key _ | key == KASCII 'q' = do { shutdownUi; exitSuccess }
 navigate list key _ | key == KASCII 'j' = handle $ scrollDown list
                     | key == KASCII 'k' = handle $ scrollUp list
                     | otherwise         = return False
-
-handle x = do { x; return True }
+    where 
+        handle x = do { x; return True }
 
 -- Callback for list item selection
 writeResult :: ActivateItemEvent String b -> IO ()
@@ -57,4 +68,26 @@ writeResult event =
     in  do
         writeFile "/tmp/jump-hs.sh" a
         shutdownUi
+
+-- Add processed yaml data to the list
+addPairsToList :: Widget (List Directory FormattedText) -> (Name, Directory) -> IO ()
+addPairsToList list (name, dir) = addToList list dir =<< ( plainText $ T.pack name )
+
+-- Process the Yaml data
+type Name = String
+type Directory = String
+
+process :: Maybe Y.Value -> [(Name,Directory)]
+process (Just v) = processTop v
+
+processTop :: Y.Value -> [(Name,Directory)]
+processTop (Y.Array a) = V.foldl processGroup [] a
+
+processGroup :: [(Name,Directory)] -> Y.Value -> [(Name,Directory)]
+processGroup xs (Y.Array a) = foldl processPair xs $ V.toList a
+
+processPair :: [(Name,Directory)] -> Y.Value -> [(Name,Directory)]
+processPair xs (Y.Array a) = case V.toList a of
+    [Y.String x, Y.String y] -> ((T.unpack x, T.unpack y)):xs
+
 
