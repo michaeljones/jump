@@ -7,24 +7,26 @@ import           Graphics.Vty.LLInput    ( Key( KASCII) )
 import           System.IO   ( writeFile )
 import           System.Exit ( exitSuccess )
 
-import           Control.Monad ( when )
+import           Control.Monad
+import           Control.Applicative
 
 import           Data.Maybe ( isJust )
 
 import qualified Data.Text as T
 import qualified Data.Yaml as Y
+import           Data.Yaml ( (.:) )
 import qualified Data.Vector as V
 
 main :: IO ()
 main = do
 
-    results <- Y.decodeFile "jumprc" :: IO ( Maybe Y.Value )
+    results <- Y.decodeFile "jumprc" :: IO ( Maybe [Location] )
 
     when (isJust results) $ do
 
-        let pairs = process results
+        let pairs = case results of (Just locations) -> locations
             listLength = length pairs
-            entryWidth = maximum $ map (length . fst) pairs
+            entryWidth = maximum $ map (length . getName) pairs
             padding = 4
             border = 2
             borderedWidth = entryWidth + border + padding
@@ -69,31 +71,26 @@ navigate list key _ | key == KASCII 'j' = handle $ scrollDown list
 
 -- Callback for list item selection
 writeResult :: ActivateItemEvent String b -> IO ()
-writeResult event =
+writeResult event = do
     let ActivateItemEvent _ a _ = event
-    in  do
-        writeFile "/tmp/jump-hs.sh" a
-        shutdownUi
+
+    writeFile "/tmp/jump-hs.sh" a
+    shutdownUi
 
 -- Add processed yaml data to the list
-addPairsToList :: Widget (List Directory FormattedText) -> (Name, Directory) -> IO ()
-addPairsToList list (name, dir) = addToList list dir =<< ( plainText $ T.pack name )
+addPairsToList :: Widget (List Directory FormattedText) -> Location -> IO ()
+addPairsToList list (Location name dir) = addToList list dir =<< ( plainText $ T.pack name )
 
--- Process the Yaml data
 type Name = String
 type Directory = String
 
-process :: Maybe Y.Value -> [(Name,Directory)]
-process (Just v) = processTop v
+data Location = Location { getName :: Name, getDirectory :: Directory } deriving Show
 
-processTop :: Y.Value -> [(Name,Directory)]
-processTop (Y.Array a) = V.foldl processGroup [] a
+-- Specify FromJSON instance for Location to tie into Yaml deserialisation
+instance Y.FromJSON Location where
+   parseJSON (Y.Object v) = Location <$>
+                            v .: T.pack "name" <*>
+                            v .: T.pack "directory"
 
-processGroup :: [(Name,Directory)] -> Y.Value -> [(Name,Directory)]
-processGroup xs (Y.Array a) = foldl processPair xs $ V.toList a
-
-processPair :: [(Name,Directory)] -> Y.Value -> [(Name,Directory)]
-processPair xs (Y.Array a) = case V.toList a of
-    [Y.String x, Y.String y] -> ((T.unpack x, T.unpack y)):xs
-
+   parseJSON _            = mzero
 
