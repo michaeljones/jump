@@ -22,17 +22,23 @@ main = do
 
     when (isJust results) $ do
 
+        let pairs = process results
+            listLength = length pairs
+            entryWidth = maximum $ map (length . fst) pairs
+            padding = 4
+            border = 2
+            borderedWidth = entryWidth + border + padding
+            borderedHeight = listLength + border
+
         -- Create new list
         list <- newList def_attr
 
-        -- -- Populate options
-        let pairs = process results
+        -- Populate list options
         mapM_ (addPairsToList list) pairs
 
+        -- Add a border and put it + border in a fixed sized centered box
         border <- bordered list
-
-        fixed <- boxFixed 30 20 border
-
+        fixed <- boxFixed borderedWidth borderedHeight border
         ui <- centered fixed
 
         fg <- newFocusGroup
