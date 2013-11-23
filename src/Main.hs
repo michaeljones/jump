@@ -20,6 +20,8 @@ import qualified Data.Yaml as Y
 import           Data.Yaml ( (.:), (.:?) )
 import qualified Data.Vector as V()
 import qualified Data.IORef as R
+import           Data.Time ( getCurrentTime, getCurrentTimeZone, utcToLocalTime, formatTime )
+import           System.Locale ( defaultTimeLocale )
 
 main :: IO ()
 main = do
@@ -37,22 +39,35 @@ main = do
             padding = 4
             borderThickness = 2
             borderedWidth = entryWidth + borderThickness + padding
-            borderedHeight = listLength + borderThickness
+            borderedHeight = listLength -- + borderThickness
             middle = truncate $ ( toRational listLength ) / 2.0
 
         -- Create new list
-        list <- newList def_attr
+        directoryList <- newList def_attr
 
         -- Populate list options
-        mapM_ (addPairsToList list) pairs
+        mapM_ (addPairsToList directoryList) pairs
 
         -- Add a border and put it + border in a fixed sized centered box
-        border <- bordered list
-        fixed <- boxFixed borderedWidth borderedHeight border
-        ui <- centered fixed
+        fixedSizeDirectoryList <- boxFixed borderedWidth borderedHeight directoryList
+
+        time <- getCurrentTime
+        timezone <- getCurrentTimeZone
+        let localTime = utcToLocalTime timezone time
+            formattedTime = formatTime (defaultTimeLocale) "%H:%M:%S" localTime
+            formattedDay = formatTime (defaultTimeLocale) "%A, %d %B %Y" localTime
+
+        dateWidget <- (hFill ' ' 1) <++> (plainText $ T.pack formattedDay)
+        timeWidget <- (hFill ' ' 1) <++> (plainText $ T.pack formattedTime)
+        infoBox <- vBox dateWidget timeWidget
+        infoPanel <- boxFixed 30 borderedHeight infoBox
+        mainPanel <- hBox fixedSizeDirectoryList infoPanel
+        borderedMainPanel <- bordered mainPanel
+
+        ui <- centered borderedMainPanel
 
         fg <- newFocusGroup
-        _ <- addToFocusGroup fg list
+        _ <- addToFocusGroup fg directoryList
 
         c <- newCollection
         _ <- addToCollection c ui fg
@@ -61,14 +76,14 @@ main = do
         fg `onKeyPressed` exit
 
         -- List event handlers
-        list `onItemActivated` handleSelection
-        list `onKeyPressed` navigate
+        directoryList `onItemActivated` handleSelection
+        directoryList `onKeyPressed` navigate
 
         -- We want to highlight the middle item of the list to begin with but
         -- we can't do that untill everything has been set up so we schedule
         -- the task so that it happens in the event loop when everything is up
         -- and running
-        schedule $ scrollBy list middle
+        schedule $ scrollBy directoryList middle
 
         runUi c defaultContext
 
