@@ -74,15 +74,22 @@ main = do
 
 -- Callback for exiting via 'q'
 exit :: a -> Key -> b -> IO Bool
-exit _ key _ | key == KASCII 'q' = do { shutdownUi; exitSuccess }
+exit _ key _ | key == KASCII 'q' = cleanup
              | otherwise         = return False
+
+cleanup :: IO Bool
+cleanup = do
+    -- Clear the command file
+    writeFile "/tmp/jump-hs.sh" []
+    shutdownUi
+    exitSuccess
 
 -- Callback for list nagivation
 navigate :: Widget (List a b) -> Key -> c -> IO Bool
 navigate list key _ | key == KASCII 'j' = handle $ scrollDown list
                     | key == KASCII 'k' = handle $ scrollUp list
                     | otherwise         = return False
-    where 
+    where
         handle x = do { _ <- x; return True }
 
 -- Callback for list item selection
