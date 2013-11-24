@@ -30,62 +30,64 @@ main = do
 
     results <- Y.decodeFile ( fromJust jumprc ) :: IO ( Maybe [Location] )
 
-    when (isJust results) $ do
+    createUI results
 
-        let pairs = case results of (Just locations) -> locations
-                                    Nothing -> []
-            listLength = length pairs
-            entryWidth = maximum $ map (length . getName) pairs
-            padding = 4
-            borderThickness = 2
-            borderedWidth = entryWidth + borderThickness + padding
-            borderedHeight = listLength -- + borderThickness
-            middle = truncate $ ( toRational listLength ) / 2.0
+createUI :: Maybe [Location] -> IO ()
+createUI Nothing          = return ()
+createUI (Just locations) = do
 
-        -- Create new list
-        directoryList <- newList def_attr
+   let listLength = length locations
+       entryWidth = maximum $ map (length . getName) locations
+       padding = 4
+       borderThickness = 2
+       borderedWidth = entryWidth + borderThickness + padding
+       borderedHeight = listLength -- + borderThickness
+       middle = truncate $ ( toRational listLength ) / 2.0
 
-        -- Populate list options
-        mapM_ (addPairsToList directoryList) pairs
+   -- Create new list
+   directoryList <- newList def_attr
 
-        -- Add a border and put it + border in a fixed sized centered box
-        fixedSizeDirectoryList <- boxFixed borderedWidth borderedHeight directoryList
+   -- Populate list options
+   mapM_ (addPairsToList directoryList) locations
 
-        time <- getCurrentTime
-        timezone <- getCurrentTimeZone
-        let localTime = utcToLocalTime timezone time
-            formattedTime = formatTime (defaultTimeLocale) "%H:%M:%S" localTime
-            formattedDay = formatTime (defaultTimeLocale) "%A, %d %B %Y" localTime
+   -- Add a border and put it + border in a fixed sized centered box
+   fixedSizeDirectoryList <- boxFixed borderedWidth borderedHeight directoryList
 
-        dateWidget <- (hFill ' ' 1) <++> (plainText $ T.pack formattedDay)
-        timeWidget <- (hFill ' ' 1) <++> (plainText $ T.pack formattedTime)
-        infoBox <- vBox dateWidget timeWidget
-        infoPanel <- boxFixed 30 borderedHeight infoBox
-        mainPanel <- hBox fixedSizeDirectoryList infoPanel
-        borderedMainPanel <- bordered mainPanel
+   time <- getCurrentTime
+   timezone <- getCurrentTimeZone
+   let localTime = utcToLocalTime timezone time
+       formattedTime = formatTime (defaultTimeLocale) "%H:%M:%S" localTime
+       formattedDay = formatTime (defaultTimeLocale) "%A, %d %B %Y" localTime
 
-        ui <- centered borderedMainPanel
+   dateWidget <- (hFill ' ' 1) <++> (plainText $ T.pack formattedDay)
+   timeWidget <- (hFill ' ' 1) <++> (plainText $ T.pack formattedTime)
+   infoBox <- vBox dateWidget timeWidget
+   infoPanel <- boxFixed 30 borderedHeight infoBox
+   mainPanel <- hBox fixedSizeDirectoryList infoPanel
+   borderedMainPanel <- bordered mainPanel
 
-        fg <- newFocusGroup
-        _ <- addToFocusGroup fg directoryList
+   ui <- centered borderedMainPanel
 
-        c <- newCollection
-        _ <- addToCollection c ui fg
+   fg <- newFocusGroup
+   _ <- addToFocusGroup fg directoryList
 
-        -- Focus group event handlers
-        fg `onKeyPressed` exit
+   c <- newCollection
+   _ <- addToCollection c ui fg
 
-        -- List event handlers
-        directoryList `onItemActivated` handleSelection
-        directoryList `onKeyPressed` navigate
+   -- Focus group event handlers
+   fg `onKeyPressed` exit
 
-        -- We want to highlight the middle item of the list to begin with but
-        -- we can't do that untill everything has been set up so we schedule
-        -- the task so that it happens in the event loop when everything is up
-        -- and running
-        schedule $ scrollBy directoryList middle
+   -- List event handlers
+   directoryList `onItemActivated` handleSelection
+   directoryList `onKeyPressed` navigate
 
-        runUi c defaultContext
+   -- We want to highlight the middle item of the list to begin with but
+   -- we can't do that untill everything has been set up so we schedule
+   -- the task so that it happens in the event loop when everything is up
+   -- and running
+   schedule $ scrollBy directoryList middle
+
+   runUi c defaultContext
 
 -- Callback for exiting via 'q'
 exit :: a -> Key -> b -> IO Bool
