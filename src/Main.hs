@@ -7,6 +7,7 @@ import           Graphics.Vty.LLInput    ( Key( KASCII) )
 import           System.Environment ( lookupEnv )
 import           System.IO()
 import           System.Exit ( exitSuccess )
+import           System.Locale ( defaultTimeLocale )
 
 import           Control.Monad
 import           Control.Applicative
@@ -14,14 +15,13 @@ import           Control.Applicative
 import           Data.Maybe ( isJust, fromJust )
 
 import qualified Data.Map.Strict as M
-import qualified Data.List as L()
+import qualified Data.List as L
 import qualified Data.Text as T
 import qualified Data.Yaml as Y
 import           Data.Yaml ( (.:), (.:?) )
 import qualified Data.Vector as V()
 import qualified Data.IORef as R
 import           Data.Time ( getCurrentTime, getCurrentTimeZone, utcToLocalTime, formatTime )
-import           System.Locale ( defaultTimeLocale )
 
 main :: IO ()
 main = do
@@ -155,18 +155,25 @@ addPairsToList list (Location name dir tags) = do
     addToList list (dir, tags) listEntry
 
 buildTagEntry :: Maybe Tags -> String
-buildTagEntry tags = formatTags $ virtualEnvLabel tags
+buildTagEntry tags = formatTags $ ( virtualEnvLabel tags ++ githubLabel tags )
 
-formatTags :: String -> String
-formatTags ""      = " "
-formatTags content = "  " ++ content
+formatTags :: [String] -> String
+formatTags []      = " "
+formatTags content = "  " ++ ( L.intercalate " " content )
 
-virtualEnvLabel :: Maybe Tags -> String
-virtualEnvLabel Nothing     = ""
+virtualEnvLabel :: Maybe Tags -> [String]
+virtualEnvLabel Nothing  = []
 virtualEnvLabel (Just m) =
     case M.lookup "virtualenv" m of
-        (Just _) -> "[ve]"
-        Nothing  -> ""
+        (Just _) -> ["[ve]"]
+        Nothing  -> []
+
+githubLabel :: Maybe Tags -> [String]
+githubLabel Nothing  = []
+githubLabel (Just m) =
+    case M.lookup "github" m of
+        (Just _) -> ["[gh]"]
+        Nothing  -> []
 
 type Name = String
 type Directory = String
