@@ -9,32 +9,24 @@ import           System.IO()
 import           System.Exit ( exitSuccess )
 import           System.Locale ( defaultTimeLocale )
 
-import           Control.Monad
-import           Control.Applicative
+import           Data.Maybe ( isJust )
 
-import           Data.Maybe ( isJust, fromJust )
-
-import qualified Data.Map.Strict as M
 import qualified Data.List as L
 import qualified Data.Text as T
-import qualified Data.Yaml as Y
-import           Data.Yaml ( (.:), (.:?) )
 import qualified Data.Vector as V()
 import qualified Data.IORef as R
 import           Data.Time ( getCurrentTime, getCurrentTimeZone, utcToLocalTime, formatTime )
 
+import           Jump.Data ( Location(..), Directory, Tags )
+import           Jump.Config ( withConfig )
+import           Jump.Venv ( newVirtualenvAction, lastVirtualEnvAction, virtualEnvLabel )
+import           Jump.Github ( githubLabel )
+
 main :: IO ()
-main = do
+main = withConfig "JUMP_CONFIG" createUI
 
-    jumprc <- lookupEnv "JUMP_CONFIG"
-
-    results <- Y.decodeFile ( fromJust jumprc ) :: IO ( Maybe [Location] )
-
-    createUI results
-
-createUI :: Maybe [Location] -> IO ()
-createUI Nothing          = return ()
-createUI (Just locations) = do
+createUI :: [Location] -> IO ()
+createUI locations = do
 
    let listLength = length locations
        entryWidth = maximum $ map (length . getName) locations
@@ -127,20 +119,6 @@ handleSelection event = do
     shutdownUi
 
 
--- If there is a "virtualenv" tag then return a function that appends the
--- correct commands to the file to be written
-newVirtualenvAction :: Maybe Tags -> ([String] -> [String])
-newVirtualenvAction (Just a) = case M.lookup "virtualenv" a of
-    (Just value) -> let activate = "source " ++ value ++ "/bin/activate;\n"
-                    in  (++ [activate])
-    Nothing      -> id
-newVirtualenvAction Nothing  = id
-
--- Returns action to perform if we're in a virtualenv already
-lastVirtualEnvAction :: Bool -> ([String] -> [String])
-lastVirtualEnvAction True  = (++ ["deactivate;\n"])
-lastVirtualEnvAction False = id
-
 type ListVisual = Box FormattedText FormattedText
 type ListData   = (Directory, Maybe Tags)
 
@@ -149,44 +127,20 @@ addPairsToList :: Widget (List ListData ListVisual) -> Location -> IO ()
 addPairsToList list (Location name dir tags) = do
     directoryWidget <- plainText $ T.pack name
     setNormalAttribute directoryWidget (style bold)
+
     tagsWidget <- plainText . T.pack $ buildTagEntry tags
     setNormalAttribute tagsWidget (fgColor cyan)
+
     listEntry <- vBox directoryWidget tagsWidget
     addToList list (dir, tags) listEntry
 
+labelFuncs :: [Maybe Tags -> [String]]
+labelFuncs = [ virtualEnvLabel, githubLabel ]
+
 buildTagEntry :: Maybe Tags -> String
-buildTagEntry tags = formatTags $ ( virtualEnvLabel tags ++ githubLabel tags )
-
-formatTags :: [String] -> String
-formatTags []      = " "
-formatTags content = "  " ++ ( L.intercalate " " content )
-
-virtualEnvLabel :: Maybe Tags -> [String]
-virtualEnvLabel Nothing  = []
-virtualEnvLabel (Just m) =
-    case M.lookup "virtualenv" m of
-        (Just _) -> ["[ve]"]
-        Nothing  -> []
-
-githubLabel :: Maybe Tags -> [String]
-githubLabel Nothing  = []
-githubLabel (Just m) =
-    case M.lookup "github" m of
-        (Just _) -> ["[gh]"]
-        Nothing  -> []
-
-type Name = String
-type Directory = String
-type Tags = M.Map String String
-
-data Location = Location { getName :: Name, _getDirectory :: Directory, _getTags :: Maybe Tags } deriving Show
-
--- Specify FromJSON instance for Location to tie into Yaml deserialisation
-instance Y.FromJSON Location where
-   parseJSON (Y.Object v) = Location <$>
-                            v .:  T.pack "name" <*>
-                            v .:  T.pack "directory" <*>
-                            v .:? T.pack "tags"
-
-   parseJSON _            = mzero
+buildTagEntry tags = formatTags . concat $ map applyToTags labelFuncs
+  where
+    applyToTags f = f tags
+    formatTags []      = " "
+    formatTags content = "  " ++ ( L.intercalate " " content )
 
