@@ -1,12 +1,13 @@
 
 import           Graphics.Vty.Widgets.All
 
-import           Graphics.Vty.Attributes ( def_attr )
+import           Graphics.Vty.Attributes ( def_attr, bold, cyan )
 import           Graphics.Vty.LLInput    ( Key( KASCII) )
 
 import           System.Environment ( lookupEnv )
 import           System.IO()
 import           System.Exit ( exitSuccess )
+import           System.Locale ( defaultTimeLocale )
 
 import           Control.Monad
 import           Control.Applicative
@@ -14,14 +15,13 @@ import           Control.Applicative
 import           Data.Maybe ( isJust, fromJust )
 
 import qualified Data.Map.Strict as M
-import qualified Data.List as L()
+import qualified Data.List as L
 import qualified Data.Text as T
 import qualified Data.Yaml as Y
 import           Data.Yaml ( (.:), (.:?) )
 import qualified Data.Vector as V()
 import qualified Data.IORef as R
 import           Data.Time ( getCurrentTime, getCurrentTimeZone, utcToLocalTime, formatTime )
-import           System.Locale ( defaultTimeLocale )
 
 main :: IO ()
 main = do
@@ -41,7 +41,7 @@ createUI (Just locations) = do
        padding = 4
        borderThickness = 2
        borderedWidth = entryWidth + borderThickness + padding
-       borderedHeight = listLength -- + borderThickness
+       borderedHeight = listLength * 2 -- + borderThickness
        middle = truncate $ ( toRational listLength ) / 2.0
 
    -- Create new list
@@ -141,9 +141,39 @@ lastVirtualEnvAction :: Bool -> ([String] -> [String])
 lastVirtualEnvAction True  = (++ ["deactivate;\n"])
 lastVirtualEnvAction False = id
 
+type ListVisual = Box FormattedText FormattedText
+type ListData   = (Directory, Maybe Tags)
+
 -- Add processed yaml data to the list
-addPairsToList :: Widget (List (Directory, Maybe Tags) FormattedText) -> Location -> IO ()
-addPairsToList list (Location name dir tags) = addToList list (dir, tags) =<< ( plainText $ T.pack name )
+addPairsToList :: Widget (List ListData ListVisual) -> Location -> IO ()
+addPairsToList list (Location name dir tags) = do
+    directoryWidget <- plainText $ T.pack name
+    setNormalAttribute directoryWidget (style bold)
+    tagsWidget <- plainText . T.pack $ buildTagEntry tags
+    setNormalAttribute tagsWidget (fgColor cyan)
+    listEntry <- vBox directoryWidget tagsWidget
+    addToList list (dir, tags) listEntry
+
+buildTagEntry :: Maybe Tags -> String
+buildTagEntry tags = formatTags $ ( virtualEnvLabel tags ++ githubLabel tags )
+
+formatTags :: [String] -> String
+formatTags []      = " "
+formatTags content = "  " ++ ( L.intercalate " " content )
+
+virtualEnvLabel :: Maybe Tags -> [String]
+virtualEnvLabel Nothing  = []
+virtualEnvLabel (Just m) =
+    case M.lookup "virtualenv" m of
+        (Just _) -> ["[ve]"]
+        Nothing  -> []
+
+githubLabel :: Maybe Tags -> [String]
+githubLabel Nothing  = []
+githubLabel (Just m) =
+    case M.lookup "github" m of
+        (Just _) -> ["[gh]"]
+        Nothing  -> []
 
 type Name = String
 type Directory = String
