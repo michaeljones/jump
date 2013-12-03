@@ -25,7 +25,7 @@ instance Y.FromJSON Location where
    parseJSON _            = mzero
 
 
-withConfig :: String -> ( Maybe [Location] -> IO ()) -> IO ()
+withConfig :: String -> ([Location] -> IO ()) -> IO ()
 withConfig envar f = do
 
     -- Grab the JUMP_CONFIG envar so we know what file to open
@@ -37,5 +37,5 @@ withConfig envar f = do
         (Just config) -> Y.decodeFile config :: IO ( Maybe [Location] )
         Nothing       -> return Nothing
 
-    f results
+    maybe (return ()) f results
 

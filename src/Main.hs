@@ -24,9 +24,8 @@ import           Jump.Config ( withConfig )
 main :: IO ()
 main = withConfig "JUMP_CONFIG" createUI
 
-createUI :: Maybe [Location] -> IO ()
-createUI Nothing          = return ()
-createUI (Just locations) = do
+createUI :: [Location] -> IO ()
+createUI locations = do
 
    let listLength = length locations
        entryWidth = maximum $ map (length . getName) locations
