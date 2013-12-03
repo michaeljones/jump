@@ -11,7 +11,6 @@ import           System.Locale ( defaultTimeLocale )
 
 import           Data.Maybe ( isJust )
 
-import qualified Data.Map.Strict as M
 import qualified Data.List as L
 import qualified Data.Text as T
 import qualified Data.Vector as V()
@@ -21,6 +20,7 @@ import           Data.Time ( getCurrentTime, getCurrentTimeZone, utcToLocalTime,
 import           Jump.Data ( Location(..), Directory, Tags )
 import           Jump.Config ( withConfig )
 import           Jump.Venv ( newVirtualenvAction, lastVirtualEnvAction, virtualEnvLabel )
+import           Jump.Github ( githubLabel )
 
 main :: IO ()
 main = withConfig "JUMP_CONFIG" createUI
@@ -134,16 +134,13 @@ addPairsToList list (Location name dir tags) = do
     listEntry <- vBox directoryWidget tagsWidget
     addToList list (dir, tags) listEntry
 
+labelFuncs :: [Maybe Tags -> [String]]
+labelFuncs = [ virtualEnvLabel, githubLabel ]
+
 buildTagEntry :: Maybe Tags -> String
-buildTagEntry tags = formatTags $ ( virtualEnvLabel tags ++ githubLabel tags )
+buildTagEntry tags = formatTags . concat $ map applyToTags labelFuncs
   where
+    applyToTags f = f tags
     formatTags []      = " "
     formatTags content = "  " ++ ( L.intercalate " " content )
-
-githubLabel :: Maybe Tags -> [String]
-githubLabel Nothing  = []
-githubLabel (Just m) =
-    case M.lookup "github" m of
-        (Just _) -> ["[gh]"]
-        Nothing  -> []
 

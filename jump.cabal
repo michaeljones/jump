@@ -8,6 +8,7 @@ library
   exposed-modules: Jump.Data
                  , Jump.Config
                  , Jump.Venv
+                 , Jump.Github
   hs-source-dirs: src
   build-depends: base >= 4 && < 5
                , containers >= 0.5
