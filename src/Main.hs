@@ -9,28 +9,20 @@ import           System.IO()
 import           System.Exit ( exitSuccess )
 import           System.Locale ( defaultTimeLocale )
 
-import           Control.Monad
-import           Control.Applicative
-
-import           Data.Maybe ( isJust, fromJust )
+import           Data.Maybe ( isJust )
 
 import qualified Data.Map.Strict as M
 import qualified Data.List as L
 import qualified Data.Text as T
-import qualified Data.Yaml as Y
-import           Data.Yaml ( (.:), (.:?) )
 import qualified Data.Vector as V()
 import qualified Data.IORef as R
 import           Data.Time ( getCurrentTime, getCurrentTimeZone, utcToLocalTime, formatTime )
 
+import           Jump.Data ( Location(..), Directory, Tags )
+import           Jump.Config ( withConfig )
+
 main :: IO ()
-main = do
-
-    jumprc <- lookupEnv "JUMP_CONFIG"
-
-    results <- Y.decodeFile ( fromJust jumprc ) :: IO ( Maybe [Location] )
-
-    createUI results
+main = withConfig "JUMP_CONFIG" createUI
 
 createUI :: Maybe [Location] -> IO ()
 createUI Nothing          = return ()
@@ -149,17 +141,18 @@ addPairsToList :: Widget (List ListData ListVisual) -> Location -> IO ()
 addPairsToList list (Location name dir tags) = do
     directoryWidget <- plainText $ T.pack name
     setNormalAttribute directoryWidget (style bold)
+
     tagsWidget <- plainText . T.pack $ buildTagEntry tags
     setNormalAttribute tagsWidget (fgColor cyan)
+
     listEntry <- vBox directoryWidget tagsWidget
     addToList list (dir, tags) listEntry
 
 buildTagEntry :: Maybe Tags -> String
 buildTagEntry tags = formatTags $ ( virtualEnvLabel tags ++ githubLabel tags )
-
-formatTags :: [String] -> String
-formatTags []      = " "
-formatTags content = "  " ++ ( L.intercalate " " content )
+  where
+    formatTags []      = " "
+    formatTags content = "  " ++ ( L.intercalate " " content )
 
 virtualEnvLabel :: Maybe Tags -> [String]
 virtualEnvLabel Nothing  = []
@@ -174,19 +167,4 @@ githubLabel (Just m) =
     case M.lookup "github" m of
         (Just _) -> ["[gh]"]
         Nothing  -> []
-
-type Name = String
-type Directory = String
-type Tags = M.Map String String
-
-data Location = Location { getName :: Name, _getDirectory :: Directory, _getTags :: Maybe Tags } deriving Show
-
--- Specify FromJSON instance for Location to tie into Yaml deserialisation
-instance Y.FromJSON Location where
-   parseJSON (Y.Object v) = Location <$>
-                            v .:  T.pack "name" <*>
-                            v .:  T.pack "directory" <*>
-                            v .:? T.pack "tags"
-
-   parseJSON _            = mzero
 
