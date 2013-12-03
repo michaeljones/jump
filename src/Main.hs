@@ -20,6 +20,7 @@ import           Data.Time ( getCurrentTime, getCurrentTimeZone, utcToLocalTime,
 
 import           Jump.Data ( Location(..), Directory, Tags )
 import           Jump.Config ( withConfig )
+import           Jump.Venv ( newVirtualenvAction, lastVirtualEnvAction, virtualEnvLabel )
 
 main :: IO ()
 main = withConfig "JUMP_CONFIG" createUI
@@ -118,20 +119,6 @@ handleSelection event = do
     shutdownUi
 
 
--- If there is a "virtualenv" tag then return a function that appends the
--- correct commands to the file to be written
-newVirtualenvAction :: Maybe Tags -> ([String] -> [String])
-newVirtualenvAction (Just a) = case M.lookup "virtualenv" a of
-    (Just value) -> let activate = "source " ++ value ++ "/bin/activate;\n"
-                    in  (++ [activate])
-    Nothing      -> id
-newVirtualenvAction Nothing  = id
-
--- Returns action to perform if we're in a virtualenv already
-lastVirtualEnvAction :: Bool -> ([String] -> [String])
-lastVirtualEnvAction True  = (++ ["deactivate;\n"])
-lastVirtualEnvAction False = id
-
 type ListVisual = Box FormattedText FormattedText
 type ListData   = (Directory, Maybe Tags)
 
@@ -152,13 +139,6 @@ buildTagEntry tags = formatTags $ ( virtualEnvLabel tags ++ githubLabel tags )
   where
     formatTags []      = " "
     formatTags content = "  " ++ ( L.intercalate " " content )
-
-virtualEnvLabel :: Maybe Tags -> [String]
-virtualEnvLabel Nothing  = []
-virtualEnvLabel (Just m) =
-    case M.lookup "virtualenv" m of
-        (Just _) -> ["[ve]"]
-        Nothing  -> []
 
 githubLabel :: Maybe Tags -> [String]
 githubLabel Nothing  = []
