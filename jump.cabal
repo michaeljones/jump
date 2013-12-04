@@ -9,11 +9,14 @@ library
                  , Jump.Config
                  , Jump.Venv
                  , Jump.Github
+                 , Jump.Ui.Details
+                 , Jump.Ui.Data
   hs-source-dirs: src
   build-depends: base >= 4 && < 5
                , containers >= 0.5
                , yaml >= 0.8.5
                , text >= 0.11.3
+               , vty-ui == 1.6
 
 executable jump
   main-is: src/Main.hs

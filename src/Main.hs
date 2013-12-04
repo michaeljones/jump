@@ -18,14 +18,12 @@ import qualified Data.Vector as V()
 import qualified Data.IORef as R
 import           Data.Time ( getCurrentTime, getCurrentTimeZone, utcToLocalTime, formatTime )
 
-import           Jump.Data ( Location(..), Name, Tags )
+import           Jump.Data ( Location(..), Tags )
 import           Jump.Config ( withConfig )
 import           Jump.Venv ( newVirtualenvAction, lastVirtualEnvAction, virtualEnvLabel )
 import           Jump.Github ( githubLabel )
-
-type ListVisual = Box FormattedText FormattedText
-type SwitchAction = IO ()
-type DetailsMap = M.Map String SwitchAction
+import           Jump.Ui.Details ( DetailsMap, updateDetails )
+import           Jump.Ui.Data ( ListVisual )
 
 main :: IO ()
 main = withConfig "JUMP_CONFIG" createUI
@@ -90,54 +88,6 @@ createUI locations = do
    schedule $ scrollBy directoryList middle
 
    runUi c defaultContext
-
-updateDetails :: R.IORef DetailsMap -> Widget (Group FormattedText) -> SelectionEvent Location ListVisual -> IO ()
-updateDetails dmapref dgroup e = do
-
-    let SelectionOn _ location _ = e
-        name = getName location
-
-    dmap <- R.readIORef dmapref
-    case M.lookup name dmap of Nothing  -> createDetails dmapref dgroup location
-                               (Just _) -> return ()
-
-    setDetails name dmapref
-
-createDetails :: R.IORef DetailsMap -> Widget (Group FormattedText) -> Location -> IO ()
-createDetails dmapref dgroup location = do
-    let name = getName location
-        tags = getTags location
-        infoFuncs = [titleInfo, virtualenvInfo, githubInfo]
-
-    widget <- plainText . T.pack . concat $ map (\f -> f name tags) infoFuncs
-    switchFunc <- addToGroup dgroup widget
-
-    R.modifyIORef dmapref $ \m -> M.insert name switchFunc m
-
-titleInfo :: Name -> Maybe Tags -> String
-titleInfo name _ = "Details: " ++ name ++ "\n"
-
-virtualenvInfo :: Name -> Maybe Tags -> String
-virtualenvInfo _ Nothing     = ""
-virtualenvInfo _ (Just tags) =
-    case M.lookup "virtualenv" tags of
-        Nothing  -> ""
-        (Just d) -> "Virtualenv: " ++ d ++ "\n"
-
-githubInfo :: Name -> Maybe Tags -> String
-githubInfo _ Nothing     = ""
-githubInfo _ (Just tags) =
-    case M.lookup "github" tags of
-        Nothing  -> ""
-        (Just d) -> "Github: " ++ d ++ "\n"
-
-setDetails :: String -> R.IORef DetailsMap -> IO ()
-setDetails name dmapref = do
-    dmap <- R.readIORef dmapref
-    case M.lookup name dmap of
-        Nothing  -> return ()
-        (Just f) -> f
-
 
 -- Callback for exiting via 'q'
 exit :: a -> Key -> b -> IO Bool
