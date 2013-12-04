@@ -11,16 +11,21 @@ import           System.Locale ( defaultTimeLocale )
 
 import           Data.Maybe ( isJust )
 
+import qualified Data.Map.Strict as M
 import qualified Data.List as L
 import qualified Data.Text as T
 import qualified Data.Vector as V()
 import qualified Data.IORef as R
 import           Data.Time ( getCurrentTime, getCurrentTimeZone, utcToLocalTime, formatTime )
 
-import           Jump.Data ( Location(..), Directory, Tags )
+import           Jump.Data ( Location(..), Name, Tags )
 import           Jump.Config ( withConfig )
 import           Jump.Venv ( newVirtualenvAction, lastVirtualEnvAction, virtualEnvLabel )
 import           Jump.Github ( githubLabel )
+
+type ListVisual = Box FormattedText FormattedText
+type SwitchAction = IO ()
+type DetailsMap = M.Map String SwitchAction
 
 main :: IO ()
 main = withConfig "JUMP_CONFIG" createUI
@@ -53,7 +58,10 @@ createUI locations = do
 
    dateWidget <- (hFill ' ' 1) <++> (plainText $ T.pack formattedDay)
    timeWidget <- (hFill ' ' 1) <++> (plainText $ T.pack formattedTime)
-   infoBox <- vBox dateWidget timeWidget
+   dateTimeBox <- (vBox dateWidget timeWidget) <--> (hFill ' ' 2)
+   detailsGroup <- newGroup
+   _ <- addToGroup detailsGroup =<< (plainText $ T.pack "Details:")
+   infoBox <- vBox dateTimeBox detailsGroup
    infoPanel <- boxFixed 30 borderedHeight infoBox
    mainPanel <- hBox fixedSizeDirectoryList infoPanel
    borderedMainPanel <- bordered mainPanel
@@ -70,8 +78,10 @@ createUI locations = do
    fg `onKeyPressed` exit
 
    -- List event handlers
+   detailsMap <- R.newIORef ( M.empty :: DetailsMap )
    directoryList `onItemActivated` handleSelection
    directoryList `onKeyPressed` navigate
+   directoryList `onSelectionChange` updateDetails detailsMap detailsGroup
 
    -- We want to highlight the middle item of the list to begin with but
    -- we can't do that untill everything has been set up so we schedule
@@ -80,6 +90,54 @@ createUI locations = do
    schedule $ scrollBy directoryList middle
 
    runUi c defaultContext
+
+updateDetails :: R.IORef DetailsMap -> Widget (Group FormattedText) -> SelectionEvent Location ListVisual -> IO ()
+updateDetails dmapref dgroup e = do
+
+    let SelectionOn _ location _ = e
+        name = getName location
+
+    dmap <- R.readIORef dmapref
+    case M.lookup name dmap of Nothing  -> createDetails dmapref dgroup location
+                               (Just _) -> return ()
+
+    setDetails name dmapref
+
+createDetails :: R.IORef DetailsMap -> Widget (Group FormattedText) -> Location -> IO ()
+createDetails dmapref dgroup location = do
+    let name = getName location
+        tags = getTags location
+        infoFuncs = [titleInfo, virtualenvInfo, githubInfo]
+
+    widget <- plainText . T.pack . concat $ map (\f -> f name tags) infoFuncs
+    switchFunc <- addToGroup dgroup widget
+
+    R.modifyIORef dmapref $ \m -> M.insert name switchFunc m
+
+titleInfo :: Name -> Maybe Tags -> String
+titleInfo name _ = "Details: " ++ name ++ "\n"
+
+virtualenvInfo :: Name -> Maybe Tags -> String
+virtualenvInfo _ Nothing     = ""
+virtualenvInfo _ (Just tags) =
+    case M.lookup "virtualenv" tags of
+        Nothing  -> ""
+        (Just d) -> "Virtualenv: " ++ d ++ "\n"
+
+githubInfo :: Name -> Maybe Tags -> String
+githubInfo _ Nothing     = ""
+githubInfo _ (Just tags) =
+    case M.lookup "github" tags of
+        Nothing  -> ""
+        (Just d) -> "Github: " ++ d ++ "\n"
+
+setDetails :: String -> R.IORef DetailsMap -> IO ()
+setDetails name dmapref = do
+    dmap <- R.readIORef dmapref
+    case M.lookup name dmap of
+        Nothing  -> return ()
+        (Just f) -> f
+
 
 -- Callback for exiting via 'q'
 exit :: a -> Key -> b -> IO Bool
@@ -102,11 +160,11 @@ navigate list key _ | key == KASCII 'j' = handle $ scrollDown list
         handle x = do { _ <- x; return True }
 
 -- Callback for list item selection
-handleSelection :: ActivateItemEvent (Directory, Maybe Tags) b -> IO ()
+handleSelection :: ActivateItemEvent Location b -> IO ()
 handleSelection event = do
     let ActivateItemEvent _ a _ = event
-        directory = fst a
-        tags = snd a
+        directory = getDirectory a
+        tags = getTags a
 
     iolist <- R.newIORef ["cd " ++ directory ++ ";\n"]
 
@@ -119,12 +177,9 @@ handleSelection event = do
     shutdownUi
 
 
-type ListVisual = Box FormattedText FormattedText
-type ListData   = (Directory, Maybe Tags)
-
 -- Add processed yaml data to the list
-addPairsToList :: Widget (List ListData ListVisual) -> Location -> IO ()
-addPairsToList list (Location name dir tags) = do
+addPairsToList :: Widget (List Location ListVisual) -> Location -> IO ()
+addPairsToList list location@(Location name _ tags) = do
     directoryWidget <- plainText $ T.pack name
     setNormalAttribute directoryWidget (style bold)
 
@@ -132,7 +187,7 @@ addPairsToList list (Location name dir tags) = do
     setNormalAttribute tagsWidget (fgColor cyan)
 
     listEntry <- vBox directoryWidget tagsWidget
-    addToList list (dir, tags) listEntry
+    addToList list location listEntry
 
 labelFuncs :: [Maybe Tags -> [String]]
 labelFuncs = [ virtualEnvLabel, githubLabel ]

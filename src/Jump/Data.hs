@@ -12,5 +12,5 @@ type Name = String
 type Directory = String
 type Tags = M.Map String String
 
-data Location = Location { getName :: Name, _getDirectory :: Directory, _getTags :: Maybe Tags } deriving Show
+data Location = Location { getName :: Name, getDirectory :: Directory, getTags :: Maybe Tags } deriving Show
 
