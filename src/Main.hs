@@ -22,8 +22,10 @@ import           Jump.Data ( Location(..), Tags )
 import           Jump.Config ( withConfig )
 import           Jump.Venv ( newVirtualenvAction, lastVirtualEnvAction, virtualEnvLabel )
 import           Jump.Github ( githubLabel )
-import           Jump.Ui.Details ( DetailsMap, updateDetails )
+import           Jump.Ui.Details ( DetailsMap, updateDetails, titleInfo )
 import           Jump.Ui.Data ( ListVisual )
+import           Jump.Github ( githubInfo )
+-- import           Jump.Venv ( virtualenvInfo )
 
 main :: IO ()
 main = withConfig "JUMP_CONFIG" createUI
@@ -75,11 +77,16 @@ createUI locations = do
    -- Focus group event handlers
    fg `onKeyPressed` exit
 
+   let detailGens =
+        [ ("title", titleInfo)
+        , ("github", githubInfo) ]
+        -- , ("virtualenv", virtualenvInfo) ]
+
    -- List event handlers
    detailsMap <- R.newIORef ( M.empty :: DetailsMap )
    directoryList `onItemActivated` handleSelection
    directoryList `onKeyPressed` navigate
-   directoryList `onSelectionChange` updateDetails detailsMap detailsGroup
+   directoryList `onSelectionChange` updateDetails detailsMap detailGens detailsGroup
 
    -- We want to highlight the middle item of the list to begin with but
    -- we can't do that untill everything has been set up so we schedule
